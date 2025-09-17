@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Vulnerability Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js">
+function showModal(data) {
+    document.getElementById('modalTitle').innerText = data.name;
+    document.getElementById('modalDescription').innerText = data.description;
+    document.getElementById('modalFile').innerText = data.location.file + ':' + data.location.start_line;
+
+    const cwe = data.identifiers.find(i => i.type === 'cwe');
+    const owasp = data.identifiers.find(i => i.type === 'owasp');
+    document.getElementById('modalCWE').innerText = cwe ? `CWE-${cwe.value}` : 'N/A';
+    document.getElementById('modalOWASP').innerText = owasp ? owasp.name : 'N/A';
+
+    document.getElementById('vulnModal').style.display = 'block';
+}
+
+</script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e6ed;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        header h1 {
+            font-size: clamp(1.2rem, 3vw, 2.5rem);
+            font-weight: 700;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #jsonUpload {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #e0e6ed;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #jsonUpload:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #4ecdc4;
+        }
+
+        #downloadCsv {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #downloadCsv:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #232526 0%, #414345 100%);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            color: #a0a6b0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card span {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: linear-gradient(135deg, #232526 0%, #414345 100%);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chart-container h3 {
+            margin-bottom: 20px;
+            color: #e0e6ed;
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            text-align: center;
+        }
+
+        .table-container {
+            background: linear-gradient(135deg, #232526 0%, #414345 100%);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .table-container h3 {
+            margin-bottom: 20px;
+            color: #e0e6ed;
+            font-size: 1.3rem;
+        }
+
+        .table-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        #searchInput, #severityFilter {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #e0e6ed;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        #severityFilter option {
+            background: #2a2a2a;
+            color: #e0e6ed;
+            padding: 8px;
+        }
+
+        #searchInput:focus, #severityFilter:focus {
+            outline: none;
+            border-color: #4ecdc4;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        #searchInput {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background-color 0.3s ease;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .severity-high {
+            background: linear-gradient(135deg, #ff416c, #ff4757);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity-medium {
+            background: linear-gradient(135deg, #ffa726, #ff9800);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity-low {
+            background: linear-gradient(135deg, #66bb6a, #4caf50);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .file-path {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #4ecdc4;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .cwe-tag, .owasp-tag {
+            background: rgba(78, 205, 196, 0.2);
+            color: #4ecdc4;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            header {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            header h1 {
+                min-width: auto;
+            }
+            
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .table-controls {
+                flex-direction: column;
+            }
+            
+            #searchInput {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align: right; padding: 10px;">
+  <a href="/logout" style="color: #fff; background: #ff4d4d; padding: 8px 15px; border-radius: 5px; text-decoration: none;">
+    🔒 Logout
+  </a>
+</div>
+    <div class="container">
+        <header>
+            <h1>🛡️ Security Vulnerability Dashboard</h1>
+            <div class="controls">
+                <input type="file" id="jsonUpload" accept=".json" />
+                <button id="downloadCsv">📊 Download CSV</button>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Vulnerabilities</h3>
+                <span id="totalVulns">0</span>
+            </div>
+            <div class="stat-card">
+                <h3>High Severity</h3>
+                <span id="highSeverity">0</span>
+            </div>
+            <div class="stat-card">
+                <h3>Medium Severity</h3>
+                <span id="mediumSeverity">0</span>
+            </div>
+            <div class="stat-card">
+                <h3>Low Severity</h3>
+                <span id="lowSeverity">0</span>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h3>🎯 Severity Distribution</h3>
+                <canvas id="severityChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <h3>📁 Top Vulnerable Files</h3>
+                <canvas id="fileChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>🔍 Vulnerability Types</h3>
+                <canvas id="categoryChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>⚠️ OWASP Top 10</h3>
+                <canvas id="owaspChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>📊 Risk Timeline</h3>
+                <canvas id="riskChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>🛡️ CWE Categories</h3>
+                <canvas id="cweChart"></canvas>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <h3>Vulnerability Details</h3>
+            <div class="table-controls">
+                <input type="text" id="searchInput" placeholder="🔍 Search vulnerabilities...">
+                <select id="severityFilter">
+                    <option value="">All Severities</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+            </div>
+            <div class="table-wrapper">
+                <table id="vulnTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Severity</th>
+                            <th>File</th>
+                            <th>Line</th>
+                            <th>Category</th>
+                            <th>CWE</th>
+                            <th>OWASP</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vulnTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let vulnerabilityData = [];
+        let charts = {};
+
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('./gl-sast-report-semgrep.json');
+                const data = await response.json();
+                processData(data);
+            } catch (error) {
+                console.log('No default JSON file found, waiting for upload...');
+            }
+        });
+
+        // File upload handler
+        document.getElementById('jsonUpload').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        processData(data);
+                    } catch (error) {
+                        alert('Invalid JSON file format');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Process vulnerability data
+        function processData(data) {
+            vulnerabilityData = data.vulnerabilities || [];
+            updateStats();
+            createCharts();
+            populateTable();
+        }
+
+        // Update statistics cards
+        function updateStats() {
+            const severityCounts = vulnerabilityData.reduce((acc, vuln) => {
+                acc[vuln.severity] = (acc[vuln.severity] || 0) + 1;
+                return acc;
+            }, {});
+
+            document.getElementById('totalVulns').textContent = vulnerabilityData.length;
+            document.getElementById('highSeverity').textContent = severityCounts.High || 0;
+            document.getElementById('mediumSeverity').textContent = severityCounts.Medium || 0;
+            document.getElementById('lowSeverity').textContent = severityCounts.Low || 0;
+        }
+
+        // Create all charts
+        function createCharts() {
+            createSeverityChart();
+            createFileChart();
+            createCategoryChart();
+            createOwaspChart();
+            createRiskChart();
+            createCweChart();
+        }
+
+        // Severity distribution chart
+        function createSeverityChart() {
+            const ctx = document.getElementById('severityChart').getContext('2d');
+            const severityCounts = vulnerabilityData.reduce((acc, vuln) => {
+                acc[vuln.severity] = (acc[vuln.severity] || 0) + 1;
+                return acc;
+            }, {});
+
+            if (charts.severity) charts.severity.destroy();
+            
+            charts.severity = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(severityCounts).map(s => `${s} (${severityCounts[s]})`),
+                    datasets: [{
+                        data: Object.values(severityCounts),
+                        backgroundColor: [
+                            'rgba(255, 65, 108, 0.9)',
+                            'rgba(255, 167, 38, 0.9)',
+                            'rgba(102, 187, 106, 0.9)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 65, 108, 1)',
+                            'rgba(255, 167, 38, 1)',
+                            'rgba(102, 187, 106, 1)'
+                        ],
+                        borderWidth: 3,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { 
+                                color: '#e0e6ed',
+                                padding: 20,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.label}: ${((context.parsed / vulnerabilityData.length) * 100).toFixed(1)}%`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Vulnerabilities by file chart
+        function createFileChart() {
+            const ctx = document.getElementById('fileChart').getContext('2d');
+            const fileCounts = vulnerabilityData.reduce((acc, vuln) => {
+                const fileName = vuln.location.file.split('/').pop();
+                acc[fileName] = (acc[fileName] || 0) + 1;
+                return acc;
+            }, {});
+
+            const sortedFiles = Object.entries(fileCounts)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 8);
+
+            if (charts.file) charts.file.destroy();
+            
+            charts.file = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedFiles.map(([file]) => file.length > 15 ? file.substring(0, 15) + '...' : file),
+                    datasets: [{
+                        label: 'Issues Found',
+                        data: sortedFiles.map(([,count]) => count),
+                        backgroundColor: sortedFiles.map((_, i) => `hsla(${180 + i * 30}, 70%, 60%, 0.8)`),
+                        borderColor: sortedFiles.map((_, i) => `hsla(${180 + i * 30}, 70%, 60%, 1)`),
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { 
+                                color: '#e0e6ed',
+                                stepSize: 1
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Number of Issues',
+                                color: '#e0e6ed'
+                            }
+                        },
+                        x: {
+                            ticks: { 
+                                color: '#e0e6ed',
+                                maxRotation: 45
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => sortedFiles[items[0].dataIndex][0],
+                                label: (context) => `${context.parsed.y} vulnerabilities`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Category distribution chart
+        function createCategoryChart() {
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            const categoryCounts = vulnerabilityData.reduce((acc, vuln) => {
+                acc[vuln.category.toUpperCase()] = (acc[vuln.category.toUpperCase()] || 0) + 1;
+                return acc;
+            }, {});
+
+            if (charts.category) charts.category.destroy();
+            
+            charts.category = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(categoryCounts).map(cat => `${cat} (${categoryCounts[cat]})`),
+                    datasets: [{
+                        data: Object.values(categoryCounts),
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.9)',
+                            'rgba(118, 75, 162, 0.9)',
+                            'rgba(255, 107, 107, 0.9)',
+                            'rgba(78, 205, 196, 0.9)'
+                        ],
+                        borderColor: [
+                            'rgba(102, 126, 234, 1)',
+                            'rgba(118, 75, 162, 1)',
+                            'rgba(255, 107, 107, 1)',
+                            'rgba(78, 205, 196, 1)'
+                        ],
+                        borderWidth: 3,
+                        hoverOffset: 15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { 
+                                color: '#e0e6ed',
+                                padding: 20,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const percentage = ((context.parsed / vulnerabilityData.length) * 100).toFixed(1);
+                                    return `${context.label}: ${percentage}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // OWASP classification chart
+        function createOwaspChart() {
+            const ctx = document.getElementById('owaspChart').getContext('2d');
+            const owaspCounts = {};
+            
+            vulnerabilityData.forEach(vuln => {
+                vuln.identifiers.forEach(id => {
+                    if (id.type === 'owasp') {
+                        const shortName = id.name.split(' - ')[0];
+                        owaspCounts[shortName] = (owaspCounts[shortName] || 0) + 1;
+                    }
+                });
+            });
+
+            if (charts.owasp) charts.owasp.destroy();
+            
+            charts.owasp = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(owaspCounts),
+                    datasets: [{
+                        label: 'Vulnerabilities',
+                        data: Object.values(owaspCounts),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 205, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 205, 86, 1)',
+                            'rgba(75, 192, 192, 1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: { 
+                                color: '#e0e6ed',
+                                stepSize: 1
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#e0e6ed' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Risk timeline chart
+        function createRiskChart() {
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            const riskData = {
+                'Bundle Files': vulnerabilityData.filter(v => v.location.file.includes('bundle')).length,
+                'JS Files': vulnerabilityData.filter(v => v.location.file.includes('.js')).length,
+                'Plugin Files': vulnerabilityData.filter(v => v.location.file.includes('plugin')).length,
+                'Other Files': vulnerabilityData.filter(v => !v.location.file.includes('bundle') && !v.location.file.includes('.js') && !v.location.file.includes('plugin')).length
+            };
+
+            if (charts.risk) charts.risk.destroy();
+            
+            charts.risk = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(riskData),
+                    datasets: [{
+                        label: 'Issues Count',
+                        data: Object.values(riskData),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 205, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 205, 86, 1)',
+                            'rgba(75, 192, 192, 1)'
+                        ],
+                        borderWidth: 2,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { 
+                                color: '#e0e6ed',
+                                stepSize: 1
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        x: {
+                            ticks: { color: '#e0e6ed' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // CWE categories chart
+        function createCweChart() {
+            const ctx = document.getElementById('cweChart').getContext('2d');
+            const cweCounts = {};
+            
+            vulnerabilityData.forEach(vuln => {
+                vuln.identifiers.forEach(id => {
+                    if (id.type === 'cwe') {
+                        const cweId = `CWE-${id.value}`;
+                        cweCounts[cweId] = (cweCounts[cweId] || 0) + 1;
+                    }
+                });
+            });
+
+            if (charts.cwe) charts.cwe.destroy();
+            
+            charts.cwe = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(cweCounts).map(cwe => `${cwe} (${cweCounts[cwe]})`),
+                    datasets: [{
+                        data: Object.values(cweCounts),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 205, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 205, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)'
+                        ],
+                        borderWidth: 3,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { 
+                                color: '#e0e6ed',
+                                padding: 15,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.label}: ${((context.parsed / vulnerabilityData.length) * 100).toFixed(1)}%`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Populate vulnerability table
+        function populateTable(filteredData = vulnerabilityData) {
+            const tbody = document.getElementById('vulnTableBody');
+            tbody.innerHTML = '';
+
+            filteredData.forEach(vuln => {
+                const row = document.createElement('tr');
+                
+                const cweId = vuln.identifiers.find(id => id.type === 'cwe')?.value || 'N/A';
+                const owaspId = vuln.identifiers.find(id => id.type === 'owasp')?.name || 'N/A';
+                
+                row.innerHTML = `
+                    <td title="${vuln.name}">${vuln.name.length > 40 ? vuln.name.substring(0, 40) + '...' : vuln.name}</td>
+                    <td><span class="severity-${vuln.severity.toLowerCase()}">${vuln.severity}</span></td>
+                    <td class="file-path" title="${vuln.location.file}">${vuln.location.file}</td>
+                    <td>${vuln.location.start_line}</td>
+                    <td>${vuln.category}</td>
+                    <td><span class="cwe-tag">CWE-${cweId}</span></td>
+                    <td><span class="owasp-tag">${owaspId}</span></td>
+                `;
+                
+row.addEventListener('click', () => {
+    fetch(`/vulnerability/${vuln.id}`)
+        .then(res => res.json())
+        .then(data => showModal(data));
+});
+tbody.appendChild(row);
+
+            });
+        }
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', filterTable);
+        document.getElementById('severityFilter').addEventListener('change', filterTable);
+
+        function filterTable() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const severityFilter = document.getElementById('severityFilter').value;
+            
+            const filtered = vulnerabilityData.filter(vuln => {
+                const matchesSearch = vuln.name.toLowerCase().includes(searchTerm) ||
+                                    vuln.location.file.toLowerCase().includes(searchTerm) ||
+                                    vuln.category.toLowerCase().includes(searchTerm);
+                
+                const matchesSeverity = !severityFilter || vuln.severity === severityFilter;
+                
+                return matchesSearch && matchesSeverity;
+            });
+            
+            populateTable(filtered);
+        }
+
+        // CSV download functionality
+        document.getElementById('downloadCsv').addEventListener('click', downloadCsv);
+
+        function downloadCsv() {
+            if (vulnerabilityData.length === 0) {
+                alert('No data to download');
+                return;
+            }
+
+            const headers = ['Name', 'Severity', 'File', 'Line', 'Category', 'CWE', 'OWASP', 'Description'];
+            const csvContent = [
+                headers.join(','),
+                ...vulnerabilityData.map(vuln => {
+                    const cweId = vuln.identifiers.find(id => id.type === 'cwe')?.value || 'N/A';
+                    const owaspId = vuln.identifiers.find(id => id.type === 'owasp')?.name || 'N/A';
+                    
+                    return [
+                        `"${vuln.name.replace(/"/g, '""')}"`,
+                        vuln.severity,
+                        `"${vuln.location.file}"`,
+                        vuln.location.start_line,
+                        vuln.category,
+                        `CWE-${cweId}`,
+                        `"${owaspId}"`,
+                        `"${vuln.description.replace(/"/g, '""')}"`
+                    ].join(',');
+                })
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `vulnerability-report-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+    
+function showModal(data) {
+    document.getElementById('modalTitle').innerText = data.name;
+    document.getElementById('modalDescription').innerText = data.description;
+    document.getElementById('modalFile').innerText = data.location.file + ':' + data.location.start_line;
+
+    const cwe = data.identifiers.find(i => i.type === 'cwe');
+    const owasp = data.identifiers.find(i => i.type === 'owasp');
+    document.getElementById('modalCWE').innerText = cwe ? `CWE-${cwe.value}` : 'N/A';
+    document.getElementById('modalOWASP').innerText = owasp ? owasp.name : 'N/A';
+
+    document.getElementById('vulnModal').style.display = 'block';
+}
+
+</script>
+
+<!-- Vulnerability Detail Modal -->
+<div id="vulnModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000;">
+  <div class="modal-content" style="background:#1e1e2f; margin:10% auto; padding:20px; border-radius:10px; width:80%; max-width:600px; color:#e0e6ed;">
+    <span class="close" style="float:right; font-size:24px; cursor:pointer;" onclick="document.getElementById('vulnModal').style.display='none'">&times;</span>
+    <h2 id="modalTitle"></h2>
+    <p id="modalDescription"></p>
+    <p><strong>File:</strong> <span id="modalFile"></span></p>
+    <p><strong>CWE:</strong> <span id="modalCWE"></span></p>
+    <p><strong>OWASP:</strong> <span id="modalOWASP"></span></p>
+  </div>
+</div>
+
+</body>
+</html>
