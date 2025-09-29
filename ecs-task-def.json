@@ -1,0 +1,21 @@
+{
+  "family": "sast-task",
+  "executionRoleArn": "arn:aws:iam::515517371214:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [ "FARGATE" ],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "sast-container",
+      "image": "515517371214.dkr.ecr.us-east-1.amazonaws.com/sast:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5000,
+          "protocol": "tcp"
+        }
+      ]
+    }
+  ]
+}
